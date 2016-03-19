@@ -17,23 +17,58 @@ use yii\web\ServerErrorHttpException;
 class BallanceController extends \yii\rest\ActiveController
 {
     public $modelClass = 'app\models\UserBallance';
-    private $data;
 
+    // Exception error code
+    private $errorCodes = [
+        501 => 'Failed to add  new user',
+        502 => 'Delete user failed',
+        503 => 'Failed to add ballance to user',
+        504 => 'Failed to sub ballance to user',
+        505 => 'User has not enough money',
+        506 => 'Transfer from user to user failed',
+        507 => 'User ID format is not correct',
+        508 => 'Ballance format is not correct (use decimal 19.2). (1.04 for example)',
+        509 => 'User does not exist',
+        510 => 'Failed to sub ballance to user - internal function call',
+        511 => 'Delete user failed - non zero ballance'
+    ];
 
+    /**
+     * list of all user ballances
+     * @return array|\yii\db\ActiveRecord[]
+     * @throws ForbiddenHttpException
+     */
     public function actionBallanceAll()
     {
         $this->checkAccess('BallaceAll', $this->modelClass);
-        return UserBallance::find()->all();
+        $model = new $this->modelClass();
+        return $model::find()->all();
     }
 
+    /**
+     * return user ballance
+     * @param $uid - integer user id
+     * @return array|\yii\db\ActiveRecord
+     * @throws ForbiddenHttpException
+     * @throws ServerErrorHttpException
+     */
     public function actionBallanceOne($uid)
     {
         $this->checkAccess('BallaceOne', $this->modelClass);
         $this->userExistsWithEception($uid);
 
-        return UserBallance::findOne($uid);
+        $model = new $this->modelClass();
+        return $model::findOne($uid);
     }
 
+    /**
+     * Add new user with zero ballance
+     * POST params ['uid' => integer]
+     * params in POST method ['uid' => integer]
+     * @return array|\yii\db\ActiveRecord
+     * @throws ForbiddenHttpException
+     * @throws ServerErrorHttpException
+     */
     public function actionBallanceAddUser()
     {
         $this->checkAccess('BallaceAddUser', $this->modelClass);
@@ -55,11 +90,17 @@ class BallanceController extends \yii\rest\ActiveController
             }
             else
             {
-                throw(new ServerErrorHttpException('Failed to add  new user'));
+                throw(new ServerErrorHttpException($this->errorCodes[501], 501));
             }
         }
     }
 
+    /**
+     * Delete user with zero ballance
+     * @param $uid - integer - user ID
+     * @throws ForbiddenHttpException
+     * @throws ServerErrorHttpException
+     */
     public function actionBallanceDeleteUser($uid)
     {
         $this->checkAccess('BallanceDeleteUser', $this->modelClass);
@@ -69,6 +110,11 @@ class BallanceController extends \yii\rest\ActiveController
 
         $model = new $this->modelClass();
         $user = $model->findOne($uid);
+
+        if ($user-> ballance > 0){
+            throw(new ServerErrorHttpException($this->errorCodes[511], 511));
+        }
+
         $user->delete();
 
         if (!$user->hasErrors())
@@ -77,43 +123,154 @@ class BallanceController extends \yii\rest\ActiveController
         }
         else
         {
-            throw(new ServerErrorHttpException('Delete user failed'));
+            throw(new ServerErrorHttpException($this->errorCodes[502], 502));
         }
     }
 
-    public function actionBallanceAdd()
+    /**
+     * Add user ballance
+     * POST params ['uid' => integer, 'ballance' => decimal(19.2)]
+     * @param array $params ['uid' => integer, 'ballance' => decimal(19.2)]
+     * @return array|\yii\db\ActiveRecord
+     * @throws ForbiddenHttpException
+     * @throws ServerErrorHttpException
+     */
+    public function actionBallanceAdd($params = [])
     {
         $this->checkAccess('BallanceAdd', $this->modelClass);
 
-        //throw(new ForbiddenHttpException());
-        return UserBallance::find()->all();
+        if (empty($params)) {
+            $uid = $this->getRequestUserId();
+            $balance = $this->getRequestBallance();
+        }
+        else
+        {
+            if (empty($params['uid']) || empty($params['ballance'])
+                || !$this->checkUserIdFormat($params['uid'])
+                || !$this->checkBallanceFormat($params['ballance'])
+            )
+            {
+                throw(new ServerErrorHttpException($this->errorCodes[510], 510));
+            }
+
+            $uid = (int) $params['uid'];
+            $balance = (double) $params['ballance'];
+        }
+
+        $this->userExistsWithEception($uid);
+
+        $model = new $this->modelClass();
+        $record = $model->findOne($uid);
+        $record->ballance = $record->ballance + $balance;
+        $record->save();
+
+        if (!$record->hasErrors())
+        {
+            return $this->actionBallanceOne($uid);
+        }
+        else
+        {
+            throw(new ServerErrorHttpException($this->errorCodes[503], 503));
+        }
     }
 
-    public function actionBallanceSub()
+    /**
+     * Sub user ballance. if not enough monney throws an exception.
+     * POST params ['uid' => integer, 'ballance' => decimal(19.2)]
+     * @param array $params ['uid' => integer, 'ballance' => decimal(19.2)]
+     * @return array|\yii\db\ActiveRecord
+     * @throws ForbiddenHttpException
+     * @throws ServerErrorHttpException
+     */
+    public function actionBallanceSub($params = [])
     {
         $this->checkAccess('BallaceBallanceSub', $this->modelClass);
-        //throw(new ForbiddenHttpException());
-        return UserBallance::find()->all();
+
+        if (empty($params)) {
+            $uid = $this->getRequestUserId();
+            $balance = $this->getRequestBallance();
+        }
+        else
+        {
+            if (empty($params['uid']) || empty($params['ballance'])
+                || !$this->checkUserIdFormat($params['uid'])
+                || !$this->checkBallanceFormat($params['ballance'])
+            )
+            {
+                throw(new ServerErrorHttpException($this->errorCodes[510], 510));
+            }
+
+            $uid = (int) $params['uid'];
+            $balance = (double) $params['ballance'];
+        }
+
+        $this->userExistsWithEception($uid);
+
+        $model = new $this->modelClass();
+        $record = $model->findOne($uid);
+
+        if ((double) $record->ballance - (double) $balance >= 0)
+        {
+            $record->ballance = $record->ballance - $balance;
+            $record->save();
+
+            if (!$record->hasErrors())
+            {
+                return $this->actionBallanceOne($uid);
+            }
+            else
+            {
+                throw(new ServerErrorHttpException($this->errorCodes[504], 504));
+            }
+        }
+        else
+        {
+            throw(new ServerErrorHttpException($this->errorCodes[505], 505));
+        }
     }
 
+    /**
+     * Transfer money from user to user.
+     * POST params ['uid' => integer, 'ballance' => decimal(19.2), 'uid2' => integer,]
+     * @return array|\yii\db\ActiveRecord[]
+     * @throws ForbiddenHttpException
+     * @throws ServerErrorHttpException
+     * @throws \yii\db\Exception
+     */
     public function actionBallanceTransfer()
     {
         $this->checkAccess('BallanceTransfer', $this->modelClass);
-        //throw(new ForbiddenHttpException());
-        return UserBallance::find()->all();
+        $uid1 = $this->getRequestUserId();
+        $uid2 = $this->getRequestUserId('uid2');
+        $balance = $this->getRequestBallance();
+
+        $connection = \Yii::$app->db;
+        $transaction = $connection->beginTransaction();
+        try {
+            $this->actionBallanceSub(['uid' => $uid1, 'ballance' => $balance]);
+            $this->actionBallanceAdd(['uid' => $uid2, 'ballance' => $balance]);
+            $transaction->commit();
+            $model = new $this->modelClass();
+            return $model::find()->where(['in', 'user_id',[$uid1, $uid2]])->all();
+        } catch(\Exception $e) {
+            $transaction->rollBack();
+            throw(new ServerErrorHttpException($this->errorCodes[506] . '('.$e->getMessage().')', 506));
+        }
     }
 
 
-
-
-
-
-    private function getRequestUserId()
+    /**
+     * Get user id from request GET or POST with checking format
+     * @param string $uidName - request name of user ID
+     * @return int
+     * @throws ServerErrorHttpException
+     */
+    private function getRequestUserId($uidName = 'uid')
     {
-        $uid = isset($_GET['uid']) ? (int) $_GET['uid'] : 0;
+        $uid = isset($_GET[$uidName]) ? (int) $_GET[$uidName] : 0;
         $uid = !$uid
-            ? (isset($_POST['uid'])
-                ? (int) $_POST['uid']
+            ? (isset($_POST[$uidName])
+                ? (int) $_POST[$uidName]
                 : 0)
             : 0;
 
@@ -122,37 +279,80 @@ class BallanceController extends \yii\rest\ActiveController
         return $uid;
     }
 
+    /**
+     * Checks user format
+     * @param integer $uid - user ID
+     * @return bool
+     * @throws ServerErrorHttpException
+     */
     private function checkUserIdFormat($uid)
     {
         if (!is_numeric($uid) || $uid < 1)
         {
-            throw(new ServerErrorHttpException('User ID  is not correct'));
+            throw(new ServerErrorHttpException($this->errorCodes[507], 507));
         }
 
         return true;
     }
 
-    private function getRequestData()
+    /**
+     * Get ballance from request GET or POST with checking format
+     * @return decimal
+     * @throws ServerErrorHttpException
+     */
+    private function getRequestBallance()
     {
-        $this->data = $_POST;
-        $this->data['user_id'] = $this->getRequestUserId();
+        $ballance = isset($_POST['ballance']) ? $_POST['ballance'] : 0;
 
-        return $this->data;
+        $this->checkBallanceFormat($ballance);
+
+        return $ballance;
     }
 
+    /**
+     * Checks ballance format
+     * @param decimal $ballance
+     * @return bool
+     * @throws ServerErrorHttpException
+     */
+    private function checkBallanceFormat($ballance)
+    {
+        if (!is_numeric($ballance) || $ballance <= 0 || strpos($ballance, ',') || !strpos($ballance, '.') || count(explode('.', $ballance)) != 2)
+        {
+            throw(new ServerErrorHttpException($this->errorCodes[508], 508));
+        }
+
+        return true;
+    }
+
+    /**
+     * Cheks user exitstance
+     * @param integer $uid - user ID
+     * @return null|static
+     */
     private function userExists($uid)
     {
-        return UserBallance::findOne($uid);
+        $model = new $this->modelClass();
+        return $model::findOne($uid);
     }
 
+    /**
+     * Cheks user exitstance with raise an exception if it does not exist
+     * @param $uid
+     * @throws ServerErrorHttpException
+     */
     private function userExistsWithEception($uid)
     {
         if (!$this->userExists($uid))
         {
-            throw(new ServerErrorHttpException('User does not exist'));
+            throw(new ServerErrorHttpException($this->errorCodes[509], 509));
         }
     }
 
+    /**
+     * Send a request with message
+     * @param string $msg - message
+     */
     private function sendRequest($msg)
     {
         $response = yii::$app->getResponse();
