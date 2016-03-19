@@ -21,14 +21,15 @@ $config = [
             'class' => 'yii\web\UrlManager',
             'enablePrettyUrl' => true,
             'showScriptName' => false,
+            'enableStrictParsing' => false,
             'rules' => [
-                'class' => 'yii\rest\UrlRule',
-                //'controller' => 'user'
-                'controller' => 'ballance',
-                /*'tokens' => [
-                    //'{user_id}' => '<user_id:\\w+>'
-                    '{user_id}' => '<user_id:\\w+>'
-                ]*/
+                'GET,POST ballance' => 'ballance/ballance-all',
+                'GET,POST,HEAD ballance/<uid>' => 'ballance/ballance-one',
+                'POST ballance_add_user' => 'ballance/ballance-add-user',
+                'DELETE ballance_delete_user/<uid>' => 'ballance/ballance-delete-user',
+                'POST ballance_add' => 'ballance/ballance-add',
+                'POST ballance_sub' => 'ballance/ballance-sub',
+                'POST ballance_transfer' => 'ballance/ballance-transfer',
             ]
         ],
         'user' => [

@@ -16,14 +16,14 @@ use Yii;
  * @property integer $user_id
  * @property string $ballance
  */
-class Ballance extends \yii\db\ActiveRecord
+class UserBallance extends \yii\db\ActiveRecord
 {
     /**
      * @inheritdoc
      */
     public static function tableName()
     {
-        return 'ballance';
+        return 'user_ballance';
     }
 
     /**
