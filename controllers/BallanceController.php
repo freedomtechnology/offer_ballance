@@ -10,6 +10,7 @@ namespace app\controllers;
 
 use Yii;
 use app\models\UserBallance;
+use app\models\BallanceHistory;
 use yii\web\ForbiddenHttpException;
 use yii\web\ServerErrorHttpException;
 
@@ -30,7 +31,8 @@ class BallanceController extends \yii\rest\ActiveController
         508 => 'Ballance format is not correct (use decimal 19.2). (1.04 for example)',
         509 => 'User does not exist',
         510 => 'Failed to sub ballance to user - internal function call',
-        511 => 'Delete user failed - non zero ballance'
+        511 => 'Delete user failed - non zero ballance',
+        512 => 'Failed saving ballance history'
     ];
 
     /**
@@ -52,9 +54,9 @@ class BallanceController extends \yii\rest\ActiveController
      * @throws ForbiddenHttpException
      * @throws ServerErrorHttpException
      */
-    public function actionBallanceOne($uid)
+    public function actionBallanceUser($uid)
     {
-        $this->checkAccess('BallaceOne', $this->modelClass);
+        $this->checkAccess('BallaceUser', $this->modelClass);
         $this->userExistsWithEception($uid);
 
         $model = new $this->modelClass();
@@ -76,19 +78,27 @@ class BallanceController extends \yii\rest\ActiveController
 
         if ($this->userExists($uid))
         {
-            return $this->actionBallanceOne($uid);
+            return $this->actionBallanceUser($uid);
         }
         else
         {
             $user = new $this->modelClass();
             $user->user_id = $uid;
-            $user->save();
 
-            if (!$user->hasErrors())
-            {
-                return $this->actionBallanceOne($uid);
+            $connection = \Yii::$app->db;
+            $transaction = $connection->beginTransaction();
+            try {
+                $transactionMD5 =  md5($uid.time());
+                $user->save();
+                $this->saveToBallanceHistory($uid, 0.00, 'user_add', $transactionMD5);
+                $transaction->commit();
+                return $this->actionBallanceUser($uid);
+            } catch(\Exception $e) {
+                $transaction->rollBack();
+                throw(new ServerErrorHttpException($this->errorCodes[501] . '('.$e->getMessage().')', 501));
             }
-            else
+
+            if ($user->hasErrors())
             {
                 throw(new ServerErrorHttpException($this->errorCodes[501], 501));
             }
@@ -111,17 +121,25 @@ class BallanceController extends \yii\rest\ActiveController
         $model = new $this->modelClass();
         $user = $model->findOne($uid);
 
-        if ($user-> ballance > 0){
+        if ($user->ballance > 0){
             throw(new ServerErrorHttpException($this->errorCodes[511], 511));
         }
 
-        $user->delete();
-
-        if (!$user->hasErrors())
-        {
+        $connection = \Yii::$app->db;
+        $transaction = $connection->beginTransaction();
+        try {
+            $transactionMD5 =  md5($uid.time());
+            $user->delete();
+            $this->saveToBallanceHistory($uid, 0.00, 'user_delete', $transactionMD5);
+            $transaction->commit();
             $this->sendRequest('User deleted');
+        } catch(\Exception $e) {
+            $transaction->rollBack();
+            throw(new ServerErrorHttpException($this->errorCodes[502] . '('.$e->getMessage().')', 502));
         }
-        else
+
+
+        if ($user->hasErrors())
         {
             throw(new ServerErrorHttpException($this->errorCodes[502], 502));
         }
@@ -161,14 +179,22 @@ class BallanceController extends \yii\rest\ActiveController
 
         $model = new $this->modelClass();
         $record = $model->findOne($uid);
-        $record->ballance = $record->ballance + $balance;
-        $record->save();
 
-        if (!$record->hasErrors())
-        {
-            return $this->actionBallanceOne($uid);
+        $connection = \Yii::$app->db;
+        $transaction = $connection->beginTransaction();
+        try {
+            $transactionMD5 = !empty($params['transactionMD5']) ? $params['transactionMD5'] : md5($uid.$balance.time());
+            $record->ballance = $record->ballance + $balance;
+            $record->save();
+            $this->saveToBallanceHistory($uid, $balance, 'ballance_add', $transactionMD5);
+            $transaction->commit();
+            return $this->actionBallanceUser($uid);
+        } catch(\Exception $e) {
+            $transaction->rollBack();
+            throw(new ServerErrorHttpException($this->errorCodes[503] . '('.$e->getMessage().')', 503));
         }
-        else
+
+        if ($record->hasErrors())
         {
             throw(new ServerErrorHttpException($this->errorCodes[503], 503));
         }
@@ -211,14 +237,21 @@ class BallanceController extends \yii\rest\ActiveController
 
         if ((double) $record->ballance - (double) $balance >= 0)
         {
-            $record->ballance = $record->ballance - $balance;
-            $record->save();
-
-            if (!$record->hasErrors())
-            {
-                return $this->actionBallanceOne($uid);
+            $connection = \Yii::$app->db;
+            $transaction = $connection->beginTransaction();
+            try {
+                $transactionMD5 = !empty($params['transactionMD5']) ? $params['transactionMD5'] : md5($uid.$balance.time());
+                $record->ballance = $record->ballance - $balance;
+                $record->save();
+                $this->saveToBallanceHistory($uid, $balance, 'ballance_sub', $transactionMD5);
+                $transaction->commit();
+                return $this->actionBallanceUser($uid);
+            } catch(\Exception $e) {
+                $transaction->rollBack();
+                throw(new ServerErrorHttpException($this->errorCodes[504] . '('.$e->getMessage().')', 504));
             }
-            else
+
+            if ($record->hasErrors())
             {
                 throw(new ServerErrorHttpException($this->errorCodes[504], 504));
             }
@@ -247,8 +280,10 @@ class BallanceController extends \yii\rest\ActiveController
         $connection = \Yii::$app->db;
         $transaction = $connection->beginTransaction();
         try {
-            $this->actionBallanceSub(['uid' => $uid1, 'ballance' => $balance]);
-            $this->actionBallanceAdd(['uid' => $uid2, 'ballance' => $balance]);
+            $transactionMD5 = md5($uid1.$uid2.$balance.time());
+            $this->actionBallanceSub(['uid' => $uid1, 'ballance' => $balance, 'transactionMD5' => $transactionMD5]);
+            $this->actionBallanceAdd(['uid' => $uid2, 'ballance' => $balance, 'transactionMD5' => $transactionMD5]);
+            $this->saveToBallanceHistory($uid1, $balance, 'ballance_transfer', $transactionMD5,$uid2);
             $transaction->commit();
             $model = new $this->modelClass();
             return $model::find()->where(['in', 'user_id',[$uid1, $uid2]])->all();
@@ -317,7 +352,7 @@ class BallanceController extends \yii\rest\ActiveController
      */
     private function checkBallanceFormat($ballance)
     {
-        if (!is_numeric($ballance) || $ballance <= 0 || strpos($ballance, ',') || !strpos($ballance, '.') || count(explode('.', $ballance)) != 2)
+        if (!is_numeric($ballance) || $ballance <= 0 || strpos($ballance, ','))
         {
             throw(new ServerErrorHttpException($this->errorCodes[508], 508));
         }
@@ -365,28 +400,37 @@ class BallanceController extends \yii\rest\ActiveController
         $response->send();
     }
 
-    /**
-     * Проверяет права текущего пользователя.
-     *
-     * Этот метод должен быть переопределен, чтобы проверить, имеет ли текущий пользователь
-     * право выполнения указанного действия над указанной моделью данных.
-     * Если у пользователя нет доступа, следует выбросить исключение [[ForbiddenHttpException]].
-     *
-     * @param string $action ID действия, которое надо выполнить
-     * @param \yii\base\Model $model модель, к которой нужно получить доступ. Если null, это означает, что модель, к которой нужно получить доступ, отсутствует.
-     * @param array $params дополнительные параметры
-     * @throws ForbiddenHttpException если у пользователя нет доступа
-     */
-    public function checkAccess($action, $model = null, $params = [])
+    private function saveToBallanceHistory($uid, $sum, $operation, $transaction = '', $uidTo = null)
     {
-        // проверить, имеет ли пользователь доступ к $action и $model
-        // выбросить ForbiddenHttpException, если доступ следует запретить
+        $model = new BallanceHistory();
+        $this->checkUserIdFormat($uid);
 
-        if (in_array($action, ['update', 'delete', 'view', 'create', 'index','options']))
+        if (!is_null($uidTo))
         {
-            throw(new ForbiddenHttpException());
+            $this->checkUserIdFormat($uidTo);
+        }
+        else
+        {
+            $uidTo = 0;
         }
 
-        return false;
+        if ($sum != '0.00')
+        {
+            $this->checkBallanceFormat($sum);
+        }
+
+        $model->user_id = $uid;
+        $model->sum = $sum;
+        $model->operation = $operation;
+        $model->transaction_description = $transaction;
+        $model->user_id_to = $uidTo;
+        $model->save();
+
+        if ($model->hasErrors())
+        {
+            throw(new ServerErrorHttpException($this->errorCodes[512], 512));
+        }
+
+        return true;
     }
 }
