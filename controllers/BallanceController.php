@@ -97,11 +97,6 @@ class BallanceController extends \yii\rest\ActiveController
                 $transaction->rollBack();
                 throw(new ServerErrorHttpException($this->errorCodes[501] . '('.$e->getMessage().')', 501));
             }
-
-            if ($user->hasErrors())
-            {
-                throw(new ServerErrorHttpException($this->errorCodes[501], 501));
-            }
         }
     }
 
@@ -183,20 +178,16 @@ class BallanceController extends \yii\rest\ActiveController
         $connection = \Yii::$app->db;
         $transaction = $connection->beginTransaction();
         try {
-            $transactionMD5 = !empty($params['transactionMD5']) ? $params['transactionMD5'] : md5($uid.$balance.time());
+            $transactionDesc = !empty($_POST['trans_desc']) ? $_POST['trans_desc'] :
+                (!empty($params['transactionDesc']) ? $params['transactionDesc'] : md5($uid.$balance.time()));
             $record->ballance = $record->ballance + $balance;
             $record->save();
-            $this->saveToBallanceHistory($uid, $balance, 'ballance_add', $transactionMD5);
+            $this->saveToBallanceHistory($uid, $balance, 'ballance_add', $transactionDesc);
             $transaction->commit();
             return $this->actionBallanceUser($uid);
         } catch(\Exception $e) {
             $transaction->rollBack();
             throw(new ServerErrorHttpException($this->errorCodes[503] . '('.$e->getMessage().')', 503));
-        }
-
-        if ($record->hasErrors())
-        {
-            throw(new ServerErrorHttpException($this->errorCodes[503], 503));
         }
     }
 
@@ -240,20 +231,16 @@ class BallanceController extends \yii\rest\ActiveController
             $connection = \Yii::$app->db;
             $transaction = $connection->beginTransaction();
             try {
-                $transactionMD5 = !empty($params['transactionMD5']) ? $params['transactionMD5'] : md5($uid.$balance.time());
+                $transactionDesc = !empty($_POST['trans_desc']) ? $_POST['trans_desc'] :
+                    (!empty($params['transactionDesc']) ? $params['transactionDesc'] : md5($uid.$balance.time()));
                 $record->ballance = $record->ballance - $balance;
                 $record->save();
-                $this->saveToBallanceHistory($uid, $balance, 'ballance_sub', $transactionMD5);
+                $this->saveToBallanceHistory($uid, $balance, 'ballance_sub', $transactionDesc);
                 $transaction->commit();
                 return $this->actionBallanceUser($uid);
             } catch(\Exception $e) {
                 $transaction->rollBack();
                 throw(new ServerErrorHttpException($this->errorCodes[504] . '('.$e->getMessage().')', 504));
-            }
-
-            if ($record->hasErrors())
-            {
-                throw(new ServerErrorHttpException($this->errorCodes[504], 504));
             }
         }
         else
@@ -280,10 +267,10 @@ class BallanceController extends \yii\rest\ActiveController
         $connection = \Yii::$app->db;
         $transaction = $connection->beginTransaction();
         try {
-            $transactionMD5 = md5($uid1.$uid2.$balance.time());
-            $this->actionBallanceSub(['uid' => $uid1, 'ballance' => $balance, 'transactionMD5' => $transactionMD5]);
-            $this->actionBallanceAdd(['uid' => $uid2, 'ballance' => $balance, 'transactionMD5' => $transactionMD5]);
-            $this->saveToBallanceHistory($uid1, $balance, 'ballance_transfer', $transactionMD5,$uid2);
+            $transactionDesc = !empty($_POST['trans_desc']) ? $_POST['trans_desc'] : md5($uid1.$uid2.$balance.time());
+            $this->actionBallanceSub(['uid' => $uid1, 'ballance' => $balance, 'transactionDesc' => $transactionDesc]);
+            $this->actionBallanceAdd(['uid' => $uid2, 'ballance' => $balance, 'transactionDesc' => $transactionDesc]);
+            $this->saveToBallanceHistory($uid1, $balance, 'ballance_transfer', $transactionDesc,$uid2);
             $transaction->commit();
             $model = new $this->modelClass();
             return $model::find()->where(['in', 'user_id',[$uid1, $uid2]])->all();

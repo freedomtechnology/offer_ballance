@@ -18,7 +18,11 @@ class HistoryController extends \yii\rest\ActiveController
 {
     public $modelClass = 'app\models\BallanceHistory';
 
-
+    /**
+     * Get ballance history of all users
+     * @return array|\yii\db\ActiveRecord[]
+     * @throws ForbiddenHttpException
+     */
     public function actionBallanceHistoryAll()
     {
         $this->checkAccess('BallaceHistoryAll', $this->modelClass);
@@ -26,12 +30,16 @@ class HistoryController extends \yii\rest\ActiveController
         return $model::find()->all();
     }
 
+    /**
+     * Get history for user
+     * @param integer $uid
+     * @return array|\yii\db\ActiveRecord
+     * @throws ForbiddenHttpException
+     */
     public function actionBallanceHistoryUser($uid)
     {
         $this->checkAccess('BallaceHistoryUser', $this->modelClass);
-
         $model = new $this->modelClass();
-        //return $model::findOne($uid);
         return $model::find()->where(['=', 'user_id', $uid])->all();
     }
 }
