@@ -5,7 +5,7 @@ namespace app\models;
 use Yii;
 
 /**
- * This is the model class for table "ballance_history".
+ * This is the model class for table "balance_history".
  *
  * @property integer $id
  * @property string $date
@@ -15,14 +15,14 @@ use Yii;
  * @property string $transaction_description
  * @property integer $user_id_to
  */
-class BallanceHistory extends \yii\db\ActiveRecord
+class BalanceHistory extends \yii\db\ActiveRecord
 {
     /**
      * @inheritdoc
      */
     public static function tableName()
     {
-        return 'ballance_history';
+        return 'balance_history';
     }
 
     /**
@@ -32,7 +32,7 @@ class BallanceHistory extends \yii\db\ActiveRecord
     {
         return [
             [['date'], 'safe'],
-            [['user_id', 'user_id_to'], 'integer'],
+            [['receiver_id', 'sender_id'], 'integer'],
             [['sum'], 'number'],
             [['transaction_description'], 'string'],
             [['operation'], 'string', 'max' => 255]
@@ -47,11 +47,11 @@ class BallanceHistory extends \yii\db\ActiveRecord
         return [
             'id' => 'ID',
             'date' => 'Date',
-            'user_id' => 'User ID',
+            'receiver_id' => 'Receiver ID',
             'sum' => 'Sum',
             'operation' => 'Operation',
             'transaction_description' => 'Transaction Description',
-            'user_id_to' => 'User Id To',
+            'sender_id' => 'Sender Id To',
         ];
     }
 }

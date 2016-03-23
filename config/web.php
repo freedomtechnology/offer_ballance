@@ -23,16 +23,21 @@ $config = [
             'showScriptName' => false,
             'enableStrictParsing' => false,
             'rules' => [
-                'GET,POST ballance' => 'ballance/ballance-all',
-                'GET,POST,HEAD ballance/<uid>' => 'ballance/ballance-user',
-                'POST ballance_add_user' => 'ballance/ballance-add-user',
-                'DELETE ballance_delete_user/<uid>' => 'ballance/ballance-delete-user',
-                'POST ballance_add' => 'ballance/ballance-add',
-                'POST ballance_sub' => 'ballance/ballance-sub',
-                'POST ballance_transfer' => 'ballance/ballance-transfer',
+                'GET balance' => 'balance/balance-all',
+                'GET,HEAD balance/<uid:\d+>' => 'balance/balance-user',
+                'POST balance_add_user' => 'balance/balance-add-user',
+                'DELETE balance_delete_user/<uid:\d+>' => 'balance/balance-delete-user',
+                'POST balance_add' => 'balance/balance-add',
+                'POST balance_sub' => 'balance/balance-sub',
+                'POST balance_transfer' => 'balance/balance-transfer',
 
-                'GET,POST ballance_history' => 'history/ballance-history-all',
-                'GET,POST,HEAD ballance_history/<uid>' => 'history/ballance-history-user',
+                //balance history routes
+                'GET history/uid=<uid:\d+>&date-start=<dateStart:\d{4}\-{1}\d{2}\-{1}\d{2}>&date-end=<dateEnd:\d{4}\-{1}\d{2}\-{1}\d{2}>' => 'history/balance-history',
+                'GET history/date-start=<dateStart:\d{4}\-{1}\d{2}\-{1}\d{2}>&date-end=<dateEnd:\d{4}\-{1}\d{2}\-{1}\d{2}>' => 'history/balance-history',
+                'GET history/uid=<uid:\d+>&date-start=<dateStart:\d{4}\-{1}\d{2}\-{1}\d{2}>' => 'history/balance-history',
+                'GET history/date-start=<dateStart:\d{4}\-{1}\d{2}\-{1}\d{2}>' => 'history/balance-history',
+                'GET history/uid=<uid:\d+>' => 'history/balance-history',
+                'GET history' => 'history/balance-history',
             ]
         ],
         'user' => [

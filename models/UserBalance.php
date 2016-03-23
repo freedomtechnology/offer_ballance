@@ -11,19 +11,19 @@ namespace app\models;
 use Yii;
 
 /**
- * This is the model class for table "ballance".
+ * This is the model class for table "balance".
  *
  * @property integer $user_id
- * @property string $ballance
+ * @property string $balance
  */
-class UserBallance extends \yii\db\ActiveRecord
+class UserBalance extends \yii\db\ActiveRecord
 {
     /**
      * @inheritdoc
      */
     public static function tableName()
     {
-        return 'user_ballance';
+        return 'user_balance';
     }
 
     /**
@@ -33,7 +33,7 @@ class UserBallance extends \yii\db\ActiveRecord
     {
         return [
             [['user_id'], 'integer'],
-            [['ballance'], 'number']
+            [['balance'], 'number']
         ];
     }
 
@@ -44,7 +44,7 @@ class UserBallance extends \yii\db\ActiveRecord
     {
         return [
             'user_id' => 'User ID',
-            'ballance' => 'Ballance',
+            'balance' => 'Balance',
         ];
     }
 }
