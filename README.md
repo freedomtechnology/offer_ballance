@@ -1,6 +1,16 @@
 # offer_ballance
 
 
+**TODO:** 
+
+* Сменить ballance на balance (с одной L).
+* Привести все ошибки в соответствии с [HTTP статусами](https://en.wikipedia.org/wiki/List_of_HTTP_status_codes).
+* (Это не отменяет того, что внутри можно использовать свои коды ошибок и складывать их в лог).
+* Убрать POST из всех роутов, где он не нужен. POST используется только для создания/добавления сущностей.
+
+
+
+
 Ballance and history API
 
 
@@ -9,7 +19,7 @@ Get ballance
 
     Method:     GET,POST
     URI:        http://domain/ballance
-    Exemple:    http://domain/ballance
+    Example:    http://domain/ballance
     Params:     []
     Response:
                 [
@@ -32,11 +42,11 @@ Get ballance
                 ]
 
 Get ballance for user
-    Shows user ballance item if user exists
+Shows user ballance item if user exists
 
     Method:     GET,POST
     URI:        http://domain/ballance/user_id
-    Exemple:    http://domain/ballance/2
+    Example:    http://domain/ballance/2
     Params:     []
     Response:
                 {
@@ -48,11 +58,13 @@ Get ballance for user
 
 Add user
 
+**TODO**: Добавление пользователя должно выглядеть как POST запрос на адрес `http://domain/users`.
+
     Method:     POST
     URI:        http://domain/ballance_add_user
-    Exemple:    -
+    Example:    -
     Params:     ['uid' = integer]
-    Exemple:    ['uid' = 15]
+    Example:    ['uid' = 15]
     Response:
                 {
                   "user_id": 15,
@@ -64,13 +76,15 @@ Add user
                 512 => 'Failed saving ballance history'
 
 Delete user
-    Delete user if his ballance is zero otherwise delete will be cancelled
+Delete user if his ballance is zero otherwise delete will be cancelled
+
+**TODO**: Должен быть как HTTP method DELETE на `http://domain/user/<user_id>`.
 
     Method:     DELETE
     URI:        http://domain/ballance_delete_user/user_id
-    Exemple:    http://domain/ballance_delete_user/12
+    Example:    http://domain/ballance_delete_user/12
     Params:     []
-    Exemple:    []
+    Example:    []
     Response:
                 {
                   "code": 0,
@@ -84,13 +98,17 @@ Delete user
                 512 => 'Failed saving ballance history'
 
 Add ballance to user
-    Add sum to user ballance. If trans_desc is empty - method generates a md5 hash for transaction
+Add sum to user ballance. If trans_desc is empty - method generates a md5 hash for transaction
+
+**TODO**: Имхо, должно быть в стиле: 
+
+```HTTP PUT http://domain/balance/<user_id>```
 
     Method:     POST
     URI:        http://domain/ballance_add
-    Exemple:    -
+    Example:    -
     Params:     ['uid' - integer, 'ballance' - integer or decimal(19.2), 'trans_desc' - string]
-    Exemple:    ['uid' = 12, 'ballance' = 32.40, 'trans_desc' = 'add cash from card #e322m234mfz']
+    Example:    ['uid' = 12, 'ballance' = 32.40, 'trans_desc' = 'add cash from card #e322m234mfz']
     Response:
                 {
                   "user_id": 12,
@@ -107,13 +125,25 @@ Add ballance to user
                 81	2016-03-21 23:23:54	12	32.40	ballance_add	add cash from card #e322m234mfz	    0
 
 Sub user ballance
-    Sub sum of user ballance. If trans_desc is empty - method generates a md5 hash for transaction
+Sub sum of user ballance. If trans_desc is empty - method generates a md5 hash for transaction
+
+**TODO**: То же самое, что и выше. Как вариант, можно передавать конкретный тип операции (add (добавление), sub(вычитание), set(установление)) баланса в отдельный параметр. 
+
+Например, :
+
+```
+HTTP PUT http://domain/balance/<user_id>
+
+action: sub
+balance: <number>
+comment: 'Оло-ло-ло'
+```
 
     Method:     POST
     URI:        http://domain/ballance_sub
-    Exemple:    -
+    Example:    -
     Params:     ['uid' - integer, 'ballance' - integer or decimal(19.2), 'trans_desc' - string]
-    Exemple:    ['uid' = 12, 'ballance' = 12.40, 'trans_desc' = 'get cash via terminal #e322m234mfz']
+    Example:    ['uid' = 12, 'ballance' = 12.40, 'trans_desc' = 'get cash via terminal #e322m234mfz']
     Response:
                 {
                   "user_id": 12,
@@ -130,13 +160,16 @@ Sub user ballance
                 81	2016-03-21 23:23:54	12	12.40	ballance_sub	get cash via terminal #e322m234mfz	0
 
 Transfer ballance from user to user
-    Transfer sum from user to user ballance. If trans_desc is empty - method generates a md5 hash for transaction
+Transfer sum from user to user ballance. If trans_desc is empty - method generates a md5 hash for transaction
+
+**TODO** (необязательно): можно тогда просто убрать слово "балансе", чтобы роутинг выглядел как `http://domain/transfer` - у нас так и так весь сервис про баланс.
+
 
     Method:     POST
     URI:        http://domain/ballance_transfer
-    Exemple:    -
+    Example:    -
     Params:     ['uid' - integer, 'ballance' - integer or decimal(19.2), 'uid2' - integer, 'trans_desc' - string]
-    Exemple:    ['uid' = 12, 'ballance' = 1.40, 'uid2' = 3, 'trans_desc' = 'f5ceded9f1a974ba98bb8e90fa9d5c22']
+    Example:    ['uid' = 12, 'ballance' = 1.40, 'uid2' = 3, 'trans_desc' = 'f5ceded9f1a974ba98bb8e90fa9d5c22']
     Response:
                 [
                   {
@@ -162,9 +195,17 @@ Transfer ballance from user to user
 
 Get ballance history for all users
 
+**TODO**: 
+
+1. Лучше параметры `user_id` и `user_id_to` переименовать в `receiver_id` и `sender_id`. 
+2. Нужно иметь возможность задать рамки истории. Date_start, date_to, что-нибудь в этом духе.
+
+.
+
+
     Method:     GET,POST
     URI:        http://domain/ballance_history
-    Exemple:    http://domain/ballance_history
+    Example:    http://domain/ballance_history
     Params:     []
     Response:
                 [
@@ -244,9 +285,11 @@ Get ballance history for all users
 
 Get ballance history for user
 
+**TODO:** Лучше объединить с предыдущим, и просто в предыдущий метод добавлять параметр в виде `<user_id>`.
+
     Method:     GET,POST
     URI:        http://domain/ballance_history/user_id
-    Exemple:    http://domain/ballance_history/3
+    Example:    http://domain/ballance_history/3
     Params:     []
     Response:
                 [
