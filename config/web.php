@@ -25,11 +25,10 @@ $config = [
             'rules' => [
                 'GET balance' => 'balance/balance-all',
                 'GET,HEAD balance/<uid:\d+>' => 'balance/balance-user',
-                'POST balance_add_user' => 'balance/balance-add-user',
-                'DELETE balance_delete_user/<uid:\d+>' => 'balance/balance-delete-user',
-                'POST balance_add' => 'balance/balance-add',
-                'POST balance_sub' => 'balance/balance-sub',
-                'POST balance_transfer' => 'balance/balance-transfer',
+                'POST user' => 'balance/add-user',
+                'DELETE user/<uid:\d+>' => 'balance/delete-user',
+                'PUT balance/<uid:\d+>' => 'balance/balance-add-sub',
+                'PUT transfer' => 'balance/balance-transfer',
 
                 //balance history routes
                 'GET history/uid=<uid:\d+>&date-start=<dateStart:\d{4}\-{1}\d{2}\-{1}\d{2}>&date-end=<dateEnd:\d{4}\-{1}\d{2}\-{1}\d{2}>' => 'history/balance-history',

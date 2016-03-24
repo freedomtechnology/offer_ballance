@@ -1,23 +1,12 @@
 # offer_balance
 
-
-**TODO:** 
-
-* Сменить balance на balance (с одной L).
-* Привести все ошибки в соответствии с [HTTP статусами](https://en.wikipedia.org/wiki/List_of_HTTP_status_codes).
-* (Это не отменяет того, что внутри можно использовать свои коды ошибок и складывать их в лог).
-* Убрать POST из всех роутов, где он не нужен. POST используется только для создания/добавления сущностей.
-
-
-
-
 balance and history API
 
 
 Get balance
     Get balances for all users
 
-    Method:     GET,POST
+    Method:     GET
     URI:        http://domain/balance
     Example:    http://domain/balance
     Params:     []
@@ -44,8 +33,9 @@ Get balance
 Get balance for user
 Shows user balance item if user exists
 
-    Method:     GET,POST
-    URI:        http://domain/balance/user_id
+    Method:     GET
+    URI:        http://domain/balance/<user_id>
+                user_id - integer
     Example:    http://domain/balance/2
     Params:     []
     Response:
@@ -57,11 +47,8 @@ Shows user balance item if user exists
                 509 => 'User does not exist'
 
 Add user
-
-**TODO**: Добавление пользователя должно выглядеть как POST запрос на адрес `http://domain/users`.
-
     Method:     POST
-    URI:        http://domain/balance_add_user
+    URI:        http://domain/user
     Example:    -
     Params:     ['uid' = integer]
     Example:    ['uid' = 15]
@@ -78,10 +65,9 @@ Add user
 Delete user
 Delete user if his balance is zero otherwise delete will be cancelled
 
-**TODO**: Должен быть как HTTP method DELETE на `http://domain/user/<user_id>`.
-
     Method:     DELETE
-    URI:        http://domain/balance_delete_user/user_id
+    URI:        http://domain/balance_delete_user/<user_id>
+                user_id - integer
     Example:    http://domain/balance_delete_user/12
     Params:     []
     Example:    []
@@ -97,25 +83,24 @@ Delete user if his balance is zero otherwise delete will be cancelled
                 511 => 'Delete user failed - non zero balance'
                 512 => 'Failed saving balance history'
 
-Add balance to user
-Add sum to user balance. If trans_desc is empty - method generates a md5 hash for transaction
+Add/sub user balance
+If trans_desc is empty - method generates a md5 hash for transaction
 
-**TODO**: Имхо, должно быть в стиле: 
-
-```HTTP PUT http://domain/balance/<user_id>```
-
-    Method:     POST
-    URI:        http://domain/balance_add
-    Example:    -
-    Params:     ['uid' - integer, 'balance' - integer or decimal(19.2), 'trans_desc' - string]
-    Example:    ['uid' = 12, 'balance' = 32.40, 'trans_desc' = 'add cash from card #e322m234mfz']
+    Method:     PUT (x-www-form-urlencoded)
+    URI:        http://domain/balance/<user_id>
+                user_id - integer
+    Example:    http://domain/balance/12
+    Params:     ['operation' - string ('add', 'sub'), 'balance' - integer or decimal(19.2), 'trans_desc' - string]
+    Example:    ['operation' = 'add', 'balance' = 32.40, 'trans_desc' = 'add cash from card #e322m234mfz']
     Response:
                 {
                   "user_id": 12,
                   "balance": "32.40"
                 }
     Exceptions: Code => description
-                503 => 'Failed to add balance to user'
+                503 => 'Failed to add/sub balance to user'
+                504 => 'Operation type mismatch. Failed to add/sub balance to user'
+                505 => 'User has not enough money'
                 507 => 'User ID format is not correct'
                 508 => 'balance format is not correct (use decimal 19.2). (1.04 for example)'
                 509 => 'User does not exist'
@@ -124,52 +109,15 @@ Add sum to user balance. If trans_desc is empty - method generates a md5 hash fo
                 id  timastamp           uid sum     operation       transaction_description             user_to
                 81	2016-03-21 23:23:54	12	32.40	balance_add	add cash from card #e322m234mfz	    0
 
-Sub user balance
-Sub sum of user balance. If trans_desc is empty - method generates a md5 hash for transaction
-
-**TODO**: То же самое, что и выше. Как вариант, можно передавать конкретный тип операции (add (добавление), sub(вычитание), set(установление)) баланса в отдельный параметр. 
-
-Например, :
-
-```
-HTTP PUT http://domain/balance/<user_id>
-
-action: sub
-balance: <number>
-comment: 'Оло-ло-ло'
-```
-
-    Method:     POST
-    URI:        http://domain/balance_sub
-    Example:    -
-    Params:     ['uid' - integer, 'balance' - integer or decimal(19.2), 'trans_desc' - string]
-    Example:    ['uid' = 12, 'balance' = 12.40, 'trans_desc' = 'get cash via terminal #e322m234mfz']
-    Response:
-                {
-                  "user_id": 12,
-                  "balance": "20.00"
-                }
-    Exceptions: Code => description
-                504 => 'Failed to sub balance to user'
-                507 => 'User ID format is not correct'
-                508 => 'balance format is not correct (use decimal 19.2). (1.04 for example)'
-                509 => 'User does not exist'
-                512 => 'Failed saving balance history'
-    Log:
-                id  timastamp           uid sum     operation       transaction_description             user_to
-                81	2016-03-21 23:23:54	12	12.40	balance_sub	get cash via terminal #e322m234mfz	0
 
 Transfer balance from user to user
 Transfer sum from user to user balance. If trans_desc is empty - method generates a md5 hash for transaction
 
-**TODO** (необязательно): можно тогда просто убрать слово "балансе", чтобы роутинг выглядел как `http://domain/transfer` - у нас так и так весь сервис про баланс.
-
-
-    Method:     POST
-    URI:        http://domain/balance_transfer
+    Method:     PUT
+    URI:        http://domain/transfer
     Example:    -
-    Params:     ['uid' - integer, 'balance' - integer or decimal(19.2), 'uid2' - integer, 'trans_desc' - string]
-    Example:    ['uid' = 12, 'balance' = 1.40, 'uid2' = 3, 'trans_desc' = 'f5ceded9f1a974ba98bb8e90fa9d5c22']
+    Params:     ['sender_id' - integer, 'balance' - integer or decimal(19.2), 'receiver_id' - integer, 'trans_desc' - string]
+    Example:    ['sender_id' = 12, 'balance' = 1.40, 'receiver_id' = 3, 'trans_desc' = 'f5ceded9f1a974ba98bb8e90fa9d5c22']
     Response:
                 [
                   {
@@ -182,9 +130,9 @@ Transfer sum from user to user balance. If trans_desc is empty - method generate
                   }
                 ]
     Exceptions: Code => description
-                503 => 'Failed to add balance to user'
-                504 => 'Failed to sub balance to user'
-                506 => 'Transfer from user to user failed'
+                503 => 'Failed to add/sub balance to user'
+                504 => 'Operation type mismatch. Failed to add/sub balance to user'
+                505 => 'User has not enough money'
                 507 => 'User ID format is not correct'
                 508 => 'balance format is not correct (use decimal 19.2). (1.04 for example)'
                 509 => 'User does not exist'

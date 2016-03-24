@@ -24,12 +24,16 @@ class HistoryController extends \yii\rest\ActiveController
     public function actionBalanceHistory()
     {
         $access = $this->checkAccess('BalaceHistory', $this->modelClass);
-        $uid = (!empty($_GET['uid']) && $_GET['uid'] > 0) ? (int) $_GET['uid'] : 0;
-        $dateStart= (!empty($_GET['dateStart']) && $_GET['dateStart'] != '') ? date('Y-m-d 00:00:00',strtotime($_GET['dateStart'])) : '01.01.1970';
-        $dateEnd= (!empty($_GET['dateEnd']) && $_GET['dateEnd'] != '') ? date('Y-m-d 23:59:59',strtotime($_GET['dateEnd'])) : date('d.m.Y');
+        $request = Yii::$app->request;
+        $uid = (int) $request->get('uid');
+        $uid = (!empty($uid) && $uid > 0) ? $uid : 0;
+        $dateStart = $request->get('dateStart');
+        $dateStart= !empty($dateStart) ? date('Y-m-d 00:00:00',strtotime($dateStart)) : '01.01.1970';
+        $dateEnd = $request->get('dateEnd');
+        $dateEnd= !empty($dateEnd) ? date('Y-m-d 23:59:59',strtotime($dateEnd)) : date('d.m.Y');
 
         if ($uid != $access['userId'] && !$access['admin']) {
-            throw(new ForbiddenHttpException('User not found'));
+            throw(new ForbiddenHttpException());
         }
 
         $model = new $this->modelClass();

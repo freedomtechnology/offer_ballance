@@ -12,7 +12,9 @@ use Yii;
 use app\models\UserBalance;
 use app\models\BalanceHistory;
 use yii\web\ForbiddenHttpException;
+use yii\web\NotFoundHttpException;
 use yii\web\ServerErrorHttpException;
+use yii\web\UnprocessableEntityHttpException;
 
 
 class BalanceController extends \yii\rest\ActiveController
@@ -23,14 +25,14 @@ class BalanceController extends \yii\rest\ActiveController
     private $errorCodes = [
         501 => 'Failed to add  new user',
         502 => 'Delete user failed',
-        503 => 'Failed to add balance to user',
-        504 => 'Failed to sub balance to user',
+        503 => 'Failed to add/sub balance to user',
+        504 => 'Operation type mismatch. Failed to add/sub balance to user',
         505 => 'User has not enough money',
-        506 => 'Transfer from user to user failed',
+        506 => '',
         507 => 'User ID format is not correct',
         508 => 'Balance format is not correct (use decimal 19.2). (1.04 for example)',
         509 => 'User does not exist',
-        510 => 'Failed to sub balance to user - internal function call',
+        510 => 'Failed to add/sub balance to user - internal function call',
         511 => 'Delete user failed - non zero balance',
         512 => 'Failed saving balance history'
     ];
@@ -56,8 +58,12 @@ class BalanceController extends \yii\rest\ActiveController
      */
     public function actionBalanceUser($uid)
     {
-        $this->checkAccess('BalaceUser', $this->modelClass);
+        $access = $this->checkAccess('BalaceUser', $this->modelClass);
         $this->userExistsWithEception($uid);
+
+        if ($uid != $access['userId'] && !$access['admin']) {
+            throw(new ForbiddenHttpException());
+        }
 
         $model = new $this->modelClass();
         return $model::findOne($uid);
@@ -71,9 +77,9 @@ class BalanceController extends \yii\rest\ActiveController
      * @throws ForbiddenHttpException
      * @throws ServerErrorHttpException
      */
-    public function actionBalanceAddUser()
+    public function actionAddUser()
     {
-        $this->checkAccess('BalaceAddUser', $this->modelClass);
+        $this->checkAccess('AddUser', $this->modelClass);
         $uid = $this->getRequestUserId();
 
         if ($this->userExists($uid))
@@ -106,9 +112,9 @@ class BalanceController extends \yii\rest\ActiveController
      * @throws ForbiddenHttpException
      * @throws ServerErrorHttpException
      */
-    public function actionBalanceDeleteUser($uid)
+    public function actionDeleteUser($uid)
     {
-        $this->checkAccess('BalanceDeleteUser', $this->modelClass);
+        $this->checkAccess('DeleteUser', $this->modelClass);
         $this->checkUserIdFormat($uid);
 
         $this->userExistsWithEception($uid);
@@ -148,13 +154,17 @@ class BalanceController extends \yii\rest\ActiveController
      * @throws ForbiddenHttpException
      * @throws ServerErrorHttpException
      */
-    public function actionBalanceAdd($params = [])
+    public function actionBalanceAddSub($params = [])
     {
-        $this->checkAccess('BalanceAdd', $this->modelClass);
+        $this->checkAccess('BalanceAddSub', $this->modelClass);
+
+        $request = Yii::$app->request;
 
         if (empty($params)) {
             $uid = $this->getRequestUserId();
             $balance = $this->getRequestBalance();
+            $operation = $request->getBodyParam('operation', '');
+            $transactionDesc = $request->getBodyParam('trans_desc', '');
         }
         else
         {
@@ -168,7 +178,11 @@ class BalanceController extends \yii\rest\ActiveController
 
             $uid = (int) $params['uid'];
             $balance = (double) $params['balance'];
+            $operation = !empty($params['operation']) ? $params['operation'] : '';
+            $transactionDesc = !empty($params['transactionDesc']) ? $params['transactionDesc'] : '';
         }
+
+        $transactionDesc = !empty($transactionDesc) ? $transactionDesc : md5($uid.$balance.time());
 
         $this->userExistsWithEception($uid);
 
@@ -177,75 +191,47 @@ class BalanceController extends \yii\rest\ActiveController
 
         $connection = \Yii::$app->db;
         $transaction = $connection->beginTransaction();
+
         try {
-            $transactionDesc = !empty($_POST['trans_desc']) ? $_POST['trans_desc'] :
-                (!empty($params['transactionDesc']) ? $params['transactionDesc'] : md5($uid.$balance.time()));
-            $record->balance = $record->balance + $balance;
+
+            switch ($operation)
+            {
+                case 'add':
+                {
+                    $record->balance = $record->balance + $balance;
+                    break;
+                }
+
+                case 'sub':
+                {
+                    if ((double) $record->balance - (double) $balance >= 0)
+                    {
+                            $record->balance = $record->balance - $balance;
+                    }
+                    else
+                    {
+                        throw(new ServerErrorHttpException($this->errorCodes[505], 505));
+                    }
+                    break;
+                }
+
+                default:
+                    throw(new UnprocessableEntityHttpException($this->errorCodes[504], 504));
+            }
+
             $record->save();
-            $this->saveToBalanceHistory($uid, $balance, 'balance_add', $transactionDesc);
+
+            if ($record->hasErrors())
+            {
+                throw(new ServerErrorHttpException($this->errorCodes[503], 503));
+            }
+
+            $this->saveToBalanceHistory($uid, $balance, 'balance_'.$operation, $transactionDesc);
             $transaction->commit();
             return $this->actionBalanceUser($uid);
         } catch(\Exception $e) {
             $transaction->rollBack();
-            throw(new ServerErrorHttpException($this->errorCodes[503] . '('.$e->getMessage().')', 503));
-        }
-    }
-
-    /**
-     * Sub user balance. if not enough monney throws an exception.
-     * POST params ['uid' => integer, 'balance' => decimal(19.2)]
-     * @param array $params ['uid' => integer, 'balance' => decimal(19.2)]
-     * @return array|\yii\db\ActiveRecord
-     * @throws ForbiddenHttpException
-     * @throws ServerErrorHttpException
-     */
-    public function actionBalanceSub($params = [])
-    {
-        $this->checkAccess('BalanceSub', $this->modelClass);
-
-        if (empty($params)) {
-            $uid = $this->getRequestUserId();
-            $balance = $this->getRequestBalance();
-        }
-        else
-        {
-            if (empty($params['uid']) || empty($params['balance'])
-                || !$this->checkUserIdFormat($params['uid'])
-                || !$this->checkBalanceFormat($params['balance'])
-            )
-            {
-                throw(new ServerErrorHttpException($this->errorCodes[510], 510));
-            }
-
-            $uid = (int) $params['uid'];
-            $balance = (double) $params['balance'];
-        }
-
-        $this->userExistsWithEception($uid);
-
-        $model = new $this->modelClass();
-        $record = $model->findOne($uid);
-
-        if ((double) $record->balance - (double) $balance >= 0)
-        {
-            $connection = \Yii::$app->db;
-            $transaction = $connection->beginTransaction();
-            try {
-                $transactionDesc = !empty($_POST['trans_desc']) ? $_POST['trans_desc'] :
-                    (!empty($params['transactionDesc']) ? $params['transactionDesc'] : md5($uid.$balance.time()));
-                $record->balance = $record->balance - $balance;
-                $record->save();
-                $this->saveToBalanceHistory($uid, $balance, 'balance_sub', $transactionDesc);
-                $transaction->commit();
-                return $this->actionBalanceUser($uid);
-            } catch(\Exception $e) {
-                $transaction->rollBack();
-                throw(new ServerErrorHttpException($this->errorCodes[504] . '('.$e->getMessage().')', 504));
-            }
-        }
-        else
-        {
-            throw(new ServerErrorHttpException($this->errorCodes[505], 505));
+            throw(new ServerErrorHttpException($e->getMessage(), $e->getCode()));
         }
     }
 
@@ -260,23 +246,24 @@ class BalanceController extends \yii\rest\ActiveController
     public function actionBalanceTransfer()
     {
         $this->checkAccess('BalanceTransfer', $this->modelClass);
-        $uid1 = $this->getRequestUserId();
-        $uid2 = $this->getRequestUserId('uid2');
+        $request = Yii::$app->request;
+        $senderId = $this->getRequestUserId('sender_id');
+        $receiverId = $this->getRequestUserId('receiver_id');
         $balance = $this->getRequestBalance();
+        $transactionDesc = $request->getBodyParam('trans_desc', md5($senderId . $receiverId . $balance . time()));
 
         $connection = \Yii::$app->db;
         $transaction = $connection->beginTransaction();
         try {
-            $transactionDesc = !empty($_POST['trans_desc']) ? $_POST['trans_desc'] : md5($uid1.$uid2.$balance.time());
-            $this->actionBalanceSub(['uid' => $uid1, 'balance' => $balance, 'transactionDesc' => $transactionDesc]);
-            $this->actionBalanceAdd(['uid' => $uid2, 'balance' => $balance, 'transactionDesc' => $transactionDesc]);
-            $this->saveToBalanceHistory($uid1, $balance, 'balance_transfer', $transactionDesc,$uid2);
+            $this->actionBalanceAddSub(['operation' => 'sub', 'uid' => $senderId, 'balance' => $balance, 'transactionDesc' => $transactionDesc]);
+            $this->actionBalanceAddSub(['operation' => 'add', 'uid' => $receiverId, 'balance' => $balance, 'transactionDesc' => $transactionDesc]);
+            $this->saveToBalanceHistory($senderId, $balance, 'balance_transfer', $transactionDesc,$receiverId);
             $transaction->commit();
             $model = new $this->modelClass();
-            return $model::find()->where(['in', 'user_id',[$uid1, $uid2]])->all();
+            return $model::find()->where(['in', 'user_id',[$senderId, $receiverId]])->all();
         } catch(\Exception $e) {
             $transaction->rollBack();
-            throw(new ServerErrorHttpException($this->errorCodes[506] . '('.$e->getMessage().')', 506));
+            throw(new ServerErrorHttpException($e->getMessage(), $e->getCode()));
         }
     }
 
@@ -289,12 +276,9 @@ class BalanceController extends \yii\rest\ActiveController
      */
     private function getRequestUserId($uidName = 'uid')
     {
-        $uid = isset($_GET[$uidName]) ? (int) $_GET[$uidName] : 0;
-        $uid = !$uid
-            ? (isset($_POST[$uidName])
-                ? (int) $_POST[$uidName]
-                : 0)
-            : 0;
+        $request = Yii::$app->request;
+        $uid = (int) $request->get($uidName, 0);
+        $uid = !$uid ? (int) $request->post($uidName, 0) : $uid;
 
         $this->checkUserIdFormat($uid);
 
@@ -311,7 +295,7 @@ class BalanceController extends \yii\rest\ActiveController
     {
         if (!is_numeric($uid) || $uid < 1)
         {
-            throw(new ServerErrorHttpException($this->errorCodes[507], 507));
+            throw(new UnprocessableEntityHttpException($this->errorCodes[507], 507));
         }
 
         return true;
@@ -319,12 +303,14 @@ class BalanceController extends \yii\rest\ActiveController
 
     /**
      * Get balance from request GET or POST with checking format
-     * @return decimal
+     * @return float decimal
      * @throws ServerErrorHttpException
      */
     private function getRequestBalance()
     {
-        $balance = isset($_POST['balance']) ? $_POST['balance'] : 0;
+        $request = Yii::$app->request;
+        $balance = $request->post('balance', 0);
+        $balance = !$balance ? $request->getBodyParam('balance') : $balance;
 
         $this->checkBalanceFormat($balance);
 
@@ -333,7 +319,7 @@ class BalanceController extends \yii\rest\ActiveController
 
     /**
      * Checks balance format
-     * @param decimal $balance
+     * @param float decimal $balance
      * @return bool
      * @throws ServerErrorHttpException
      */
@@ -341,7 +327,7 @@ class BalanceController extends \yii\rest\ActiveController
     {
         if (!is_numeric($balance) || $balance <= 0 || strpos($balance, ','))
         {
-            throw(new ServerErrorHttpException($this->errorCodes[508], 508));
+            throw(new UnprocessableEntityHttpException($this->errorCodes[508], 508));
         }
 
         return true;
@@ -350,7 +336,7 @@ class BalanceController extends \yii\rest\ActiveController
     /**
      * Cheks user exitstance
      * @param integer $uid - user ID
-     * @return null|static
+     * @return array|\yii\db\ActiveRecord
      */
     private function userExists($uid)
     {
@@ -374,19 +360,32 @@ class BalanceController extends \yii\rest\ActiveController
     /**
      * Send a request with message
      * @param string $msg - message
+     * @param int $status
+     * @param int $code
      */
-    private function sendRequest($msg)
+    private function sendRequest($msg, $status = 200, $code = 0)
     {
         $response = yii::$app->getResponse();
         $response->data = [
-            'code' => 0,
+            'code' => $code,
             'message' => $msg,
         ];
 
-        $response->setStatusCode(500);
+        $response->setStatusCode($status);
         $response->send();
     }
 
+    /**
+     * Saving balance operation to history table
+     * @param integer $uid
+     * @param float decimal $sum
+     * @param string $operation
+     * @param string $transaction
+     * @param integer $sender_id
+     * @return bool
+     * @throws ServerErrorHttpException
+     * @throws UnprocessableEntityHttpException
+     */
     private function saveToBalanceHistory($uid, $sum, $operation, $transaction = '', $sender_id = null)
     {
         $model = new BalanceHistory();
