@@ -131,7 +131,7 @@ class BalanceController extends MyRESTActiveController
             $user->delete();
             $this->saveToBalanceHistory($uid, 0.00, 'user_delete', $transactionMD5);
             $transaction->commit();
-            $this->sendRequest('User deleted');
+            $this->sendRequest('User deleted',204);
         } catch(\Exception $e) {
             $transaction->rollBack();
             throw(new ServerErrorHttpException($this->errorCodes[502] . '('.$e->getMessage().')', 502));
