@@ -58,10 +58,15 @@ class MyRESTActiveController extends \yii\rest\ActiveController
         }
 
 
-        if (!empty($decoded->id) && !empty($decoded->admin))
+        if (!empty($decoded->id) && is_bool($decoded->admin))
         {
             $userId = $decoded->id;
-            $admin = $decoded->admin;
+            $admin = (bool) $decoded->admin;
+
+            if ($userId <= 0)
+            {
+                throw(new ForbiddenHttpException('Invalid user id'));
+            }
         }
         else
         {
