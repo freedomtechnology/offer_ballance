@@ -163,8 +163,8 @@ class BalanceController extends \yii\rest\ActiveController
         if (empty($params)) {
             $uid = $this->getRequestUserId();
             $balance = $this->getRequestBalance();
-            $operation = $request->getBodyParam('operation', '');
-            $transactionDesc = $request->getBodyParam('trans_desc', '');
+            $operation = $request->post('operation', '');
+            $transactionDesc = $request->post('trans_desc', '');
         }
         else
         {
@@ -250,7 +250,7 @@ class BalanceController extends \yii\rest\ActiveController
         $senderId = $this->getRequestUserId('sender_id');
         $receiverId = $this->getRequestUserId('receiver_id');
         $balance = $this->getRequestBalance();
-        $transactionDesc = $request->getBodyParam('trans_desc', md5($senderId . $receiverId . $balance . time()));
+        $transactionDesc = $request->post('trans_desc', md5($senderId . $receiverId . $balance . time()));
 
         $connection = \Yii::$app->db;
         $transaction = $connection->beginTransaction();
@@ -310,7 +310,6 @@ class BalanceController extends \yii\rest\ActiveController
     {
         $request = Yii::$app->request;
         $balance = $request->post('balance', 0);
-        $balance = !$balance ? $request->getBodyParam('balance') : $balance;
 
         $this->checkBalanceFormat($balance);
 
