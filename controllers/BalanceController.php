@@ -9,15 +9,13 @@
 namespace app\controllers;
 
 use Yii;
-use app\models\UserBalance;
 use app\models\BalanceHistory;
 use yii\web\ForbiddenHttpException;
-use yii\web\NotFoundHttpException;
 use yii\web\ServerErrorHttpException;
 use yii\web\UnprocessableEntityHttpException;
 
 
-class BalanceController extends \yii\rest\ActiveController
+class BalanceController extends MyRESTActiveController
 {
     public $modelClass = 'app\models\UserBalance';
 

@@ -12,7 +12,7 @@ use Yii;
 use yii\web\ForbiddenHttpException;
 
 
-class HistoryController extends \yii\rest\ActiveController
+class HistoryController extends MyRESTActiveController
 {
     public $modelClass = 'app\models\BalanceHistory';
 
